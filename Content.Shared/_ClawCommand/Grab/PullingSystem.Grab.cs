@@ -7,6 +7,7 @@ using Content.Shared.IdentityManagement;
 using Content.Shared.Mobs.Components;
 using Content.Shared.Movement.Events;
 using Content.Shared.Movement.Pulling.Components;
+using Content.Shared.Movement.Pulling.Events;
 using Content.Shared.Popups;
 using Content.Shared.Speech;
 using Robust.Shared.Audio;
@@ -21,10 +22,10 @@ namespace Content.Shared.Movement.Pulling.Systems;
 /// <summary>
 ///     Grab intent, ported from the space fork (Goobstation lineage).
 ///
-///     Pressing the pull key on somebody you are already pulling, while in combat mode, walks one step up the
-///     ladder: pull -> soft grab -> hard grab -> choke. Each step slows the puller further, makes the victim
-///     harder to break free, and choking additionally costs a second hand, mutes the victim and stops them
-///     breathing. Pressing it with combat mode off lets go.
+///     Starting a pull while in combat mode goes straight to a soft grab. From there, pressing the pull
+///     key again walks one more step up the ladder: soft grab -> hard grab -> choke. Each step slows the
+///     puller further, makes the victim harder to break free, and choking additionally costs a second
+///     hand, mutes the victim and stops them breathing. Pressing it with combat mode off just lets go.
 ///
 ///     Adapted for this fork: Goobstation's martial-arts grab overrides and combo events are not ported
 ///     (none of those systems exist here), throwing a grabbed victim is not included, and ContestsSystem
@@ -55,10 +56,22 @@ public sealed partial class PullingSystem
 
     private void InitializeGrab()
     {
+        SubscribeLocalEvent<PullerComponent, PullStartedMessage>(OnPullStarted);
         SubscribeLocalEvent<PullableComponent, UpdateCanMoveEvent>(OnGrabbedMoveAttempt);
         SubscribeLocalEvent<PullableComponent, SpeakAttemptEvent>(OnGrabbedSpeakAttempt);
 
         InitializeSlam(); // claw command - table/object slams, see PullingSystem.Slam.cs
+    }
+
+    /// <summary>
+    ///     Claw Command - starting a pull while already in combat mode should go straight to
+    ///     Soft Grab instead of leaving a plain, un-escalated pull that needs a second press to
+    ///     catch up. TryGrab already no-ops harmlessly if combat mode is off, or if the target is
+    ///     a dangerous mob past its cap, so nothing extra needs checking here.
+    /// </summary>
+    private void OnPullStarted(EntityUid uid, PullerComponent component, PullStartedMessage args)
+    {
+        TryGrab((args.PulledUid, null), uid);
     }
 
     /// <summary>
